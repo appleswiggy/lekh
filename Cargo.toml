@@ -1,0 +1,11 @@
+[package]
+name = "lekh"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossterm = "0.25.0"
+unicode-segmentation = "1.9.0"
+syntect = "5.0.0"

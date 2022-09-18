@@ -20,25 +20,48 @@ impl From<&str> for Row {
 }
 
 impl Row {
-    pub fn render(&self, start: usize, end: usize) -> String {
-        let end = cmp::min(end, self.string.len());
+    pub fn render(&self, start: usize, end: usize, len: usize) {
+        let end = cmp::min(end, len);
         let start = cmp::min(start, end);
 
-        let mut result = String::new();
+        let mut flag = false;
+
+        let mut skip = 0;
+        let mut chars = 0;
 
         for grapheme in self.string[..]
             .graphemes(true)
-            .skip(start)
-            .take(end - start)
         {
-            if grapheme == "\t" {
-                result.push_str(&" ");
+            if grapheme == "\x1B" {
+                flag = true;
+            }
+            if flag == true && (grapheme == "m") {
+                flag = false;
+                print!("{}", grapheme);
+                continue;
+            }
+
+            if flag == false {
+                if skip == start {
+                    if chars < end - start {
+                        if grapheme == "\t" {
+                            print!(" ");
+                        } else {
+                            print!("{}", grapheme);
+                        }
+                        chars += 1;
+                    }
+                    else {
+                        break;
+                    }
+                } else {
+                    skip += 1;
+                }
             } else {
-                result.push_str(grapheme);
+                print!("{}", grapheme);
             }
         }
-
-        result
+        print!("\r\n");
     }
 
     pub fn len(&self) -> usize {
@@ -47,6 +70,10 @@ impl Row {
 
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+
+    pub fn get_string(&self) -> &str {
+        &self.string[..]
     }
 
     pub fn insert(&mut self, at: usize, c: char) {

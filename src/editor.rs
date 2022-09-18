@@ -3,11 +3,9 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Color;
 
-// use std::{env, fs};
 use std::env;
 use std::time::Duration;
 use std::time::Instant;
-// use std::io::Write;
 
 use crate::Document;
 use crate::Row;
@@ -106,13 +104,9 @@ impl Editor {
         self.terminal.cleanup_and_exit(0);
     }
 
-    // fn test(st: String) {
-    //     let mut file = fs::File::create("debug.txt").unwrap();
-    //     file.write_all(st.as_bytes());
-    //     file.write_all(b"\n");
-    // }
-
     fn quit(&mut self) -> Result<(), std::io::Error> {
+        let mut quit = true;
+
         if self.document.is_dirty() {
             let mut result;
             loop {
@@ -121,7 +115,9 @@ impl Editor {
                 if let Some(response) = result {
                     match &*response {
                         "y" | "Y" => {
-                            self.save();
+                            if let Err(_) = self.save() {
+                                quit = false;
+                            }
                             break;
                         }
                         "n" | "N" => {
@@ -129,40 +125,50 @@ impl Editor {
                         },
                         _ => (),
                     }
+                } else {
+                    quit = false;
+                    break;
                 }
             }
         }
-        self.should_quit = true;
+        self.should_quit = quit;
         Ok(())
     }
 
-    fn save(&mut self) {
+    fn save(&mut self) -> Result<(), &str> {
         if self.document.get_file_name().is_none() {
             let new_name = self.prompt("Save as: ", |_, _, _| {}).unwrap_or(None);
             match new_name {
                 Some(file_name) => self.document.set_file_name(file_name),
                 None => {
                     self.status_message = StatusMessage::from("Save aborted.".to_string());
-                    return;
+                    return Err("Can't save file.");
                 }
             }
         }
+
         if self.document.save().is_ok() {
             self.status_message = StatusMessage::from("File saved successfully.".to_string());
         } else {
             self.status_message = StatusMessage::from("Error writing file!".to_string());
+            return Err("Can't save file.");
         }
+
+        return Ok(());
     }
 
     fn search(&mut self) {
         let old_position = self.cursor_position.clone();
         let mut direction = SearchDirection::Forward;
 
+        let mut found = false;
+
         let query = self
             .prompt(
                 "Search (ESC to cancel, Arrows to navigate): ",
                 |editor, key, query| {
                     let mut moved = false;
+                    found = false;
 
                     match key {
                         KeyCode::Right | KeyCode::Down => {
@@ -183,6 +189,7 @@ impl Editor {
                     {
                         editor.cursor_position = position;
                         editor.scroll();
+                        found = true;
                     } else if moved {
                         editor.move_cursor(KeyCode::Left);
                     }
@@ -194,19 +201,12 @@ impl Editor {
             self.cursor_position = old_position;
             self.scroll();
         }
+        else if !found {
+            self.status_message = StatusMessage::from("No results found.".to_string());
+            self.cursor_position = old_position;
+            self.scroll();
+        }
     }
-
-    // fn resize_handler<C>() -> C
-    // where 
-    //     C: FnMut(u16, u16) -> Result<(), std::io::Error>,
-    // {
-    //     |width, height| {
-    //         self.terminal.set_size(width, height);
-    //         self.scroll();
-    //         self.refresh_screen()?;
-    //         Ok(())
-    //     }
-    // }
 
     fn process_keypress(&mut self) -> Result<(), std::io::Error> {
         let key_event: KeyEvent = Terminal::read_key(|width, height| {
@@ -221,7 +221,11 @@ impl Editor {
                 if key_event.modifiers == KeyModifiers::CONTROL {
                     match ch {
                         'q' | 'Q' => self.quit()?,
-                        's' | 'S' => self.save(),
+                        's' | 'S' => {
+                            if self.save().is_err() {
+                                // do nothing
+                            };
+                        },
                         'f' | 'F' => self.search(),
                         _ => (),
                     }
@@ -296,6 +300,8 @@ impl Editor {
             self.terminal.clear_screen()?;
         } else {
             self.draw_status_bar()?;
+            print!("{}", self.document.highlight.plain_text_colors);
+
             self.draw_rows()?;
             self.draw_message_bar()?;
 
@@ -395,24 +401,23 @@ impl Editor {
         println!("{}\r", welcome_message);
     }
 
-    pub fn draw_row(&self, row: &Row) {
+    pub fn draw_row(&self, row: &Row, len: usize) {
         let width = self.terminal.get_size().width as usize;
         let start = self.offset.x;
         let end = self.offset.x.saturating_add(width);
-        let row = row.render(start, end);
 
-        println!("{}\r", row);
+        row.render(start, end, len);
     }
 
     fn draw_rows(&mut self) -> Result<(), std::io::Error> {
         let height = self.terminal.get_size().height;
         for terminal_row in 0..height {
             self.terminal.clear_current_line()?;
-            if let Some(row) = self
+            if let Some((row, len)) = self
                 .document
-                .row(self.offset.y.saturating_add(terminal_row as usize))
+                .highlighted_row(self.offset.y.saturating_add(terminal_row as usize))
             {
-                self.draw_row(row);
+                self.draw_row(row, len);
 
             } else if self.document.is_empty() && terminal_row == height / 3 {
                 self.draw_welcome_message();
@@ -467,7 +472,6 @@ impl Editor {
         self.terminal.set_fg_color(STATUS_FG_COLOR)?;
         self.terminal.set_bg_color(STATUS_BG_COLOR)?;
         println!("{}\r", status);
-        self.terminal.reset_colors()?;
 
         Ok(())
     }

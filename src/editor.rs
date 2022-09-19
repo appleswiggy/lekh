@@ -492,9 +492,8 @@ impl Editor {
             text = format!("{}{}", message.text.clone(), &" ".repeat(width.saturating_sub(len)));
 
         } else {
-            // text = " ".repeat(width);
             let help = "HELP: Ctrl-F = find | Ctrl-S = save | Ctrl-Q = quit";
-            text = format!("{}{}", help, " ".repeat(width - help.len()));
+            text = format!("{}{}", help, " ".repeat(width.saturating_sub(help.len())));
         }
 
         text.truncate(width);
@@ -552,7 +551,7 @@ impl Editor {
         }
 
         let help = "HELP: Ctrl-F = find | Ctrl-S = save | Ctrl-Q = quit";
-        let help = format!("{}{}", help, " ".repeat(self.terminal.get_size().width as usize - help.len()));
+        let help = format!("{}{}", help, " ".repeat((self.terminal.get_size().width as usize).saturating_sub(help.len())));
         self.status_message = StatusMessage::from(help);
 
         if result.is_empty() {

@@ -4,24 +4,30 @@ use crate::SearchDirection;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-#[derive(Default)]
 pub struct Row {
     string: String,
+    highlighted: String,
     len: usize,
 }
 
-impl From<&str> for Row {
-    fn from(slice: &str) -> Self {
+impl Row {
+    pub fn default() -> Self {
         Self {
-            string: String::from(slice),
-            len: slice.graphemes(true).count(),
+            string: String::new(),
+            highlighted: String::new(),
+            len: 0,
         }
     }
-}
 
-impl Row {
-    pub fn render(&self, start: usize, end: usize, len: usize) {
-        let end = cmp::min(end, len);
+    pub fn from(st: &str, highlighted: &str) -> Self {
+        Self {
+            string: String::from(st),
+            highlighted: String::from(highlighted),
+            len: st.graphemes(true).count(),
+        }
+    }
+    pub fn render(&self, start: usize, end: usize) {
+        let end = cmp::min(end, self.len);
         let start = cmp::min(start, end);
 
         let mut flag = false;
@@ -29,7 +35,7 @@ impl Row {
         let mut skip = 0;
         let mut chars = 0;
 
-        for grapheme in self.string[..]
+        for grapheme in self.highlighted[..]
             .graphemes(true)
         {
             if grapheme == "\x1B" {
@@ -76,8 +82,12 @@ impl Row {
         &self.string[..]
     }
 
+    pub fn get_highlighted(&self) -> &str {
+        &self.highlighted[..]
+    }
+
     pub fn insert(&mut self, at: usize, c: char) {
-        if at >= self.len() {
+        if at >= self.len {
             self.string.push(c);
             self.len += 1;
             return;
@@ -99,7 +109,7 @@ impl Row {
     }
 
     pub fn delete(&mut self, at: usize) {
-        if at >= self.len() {
+        if at >= self.len {
             return;
         }
 
@@ -143,6 +153,7 @@ impl Row {
 
         Self {
             string: splitted_row,
+            highlighted: self.highlighted.clone(),
             len: splitted_length,
         }
     }

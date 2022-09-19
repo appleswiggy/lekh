@@ -1,52 +1,42 @@
 use std::fs;
 use std::io::Write;
 
-use crate::Highlight;
+use crate::Highlighter;
 use crate::Position;
 use crate::Row;
 use crate::SearchDirection;
 
 pub struct Document {
     rows: Vec<Row>,
-    highlighted_rows: Vec<Row>,
     file_name: Option<String>,
     dirty: bool,
-    pub highlight: Highlight,
+    pub highlighter: Highlighter,
 }
 
 impl Document {
     pub fn default() -> Self {
-        let highlight = Highlight::default();
+        let highlighter = Highlighter::default();
         Self {
             rows: vec![],
-            highlighted_rows: vec![],
             file_name: None,
             dirty: false,
-            highlight,
+            highlighter,
         }
     }
    
     pub fn open(filename: &str) -> Result<Self, std::io::Error> {
         let contents = fs::read_to_string(filename)?;
-        let mut rows = Vec::new();
 
-        for line in contents.lines() {
-            rows.push(Row::from(line));
-        }
+        let mut highlighter = Highlighter::default();
+        highlighter.set_file_name(filename.to_string());
 
-        let mut highlight = Highlight::default();
-        highlight.set_file_name(filename.to_string());
-
-        let highlighted_rows: Vec<Row> = highlight.highlight_contents(&contents[..]);
-
-        assert_eq!(highlighted_rows.len(), rows.len());
+        let rows: Vec<Row> = highlighter.highlight_contents(&contents[..]);
 
         Ok(Self {
             rows,
-            highlighted_rows,
             file_name: Some(filename.to_string()),
             dirty: false,
-            highlight,
+            highlighter,
         })
     }
 
@@ -66,17 +56,6 @@ impl Document {
         self.rows.get(index)
     }
 
-    pub fn highlighted_row(&self, index: usize) -> Option<(&Row, usize)> {
-        let row = self.rows.get(index);
-        let highlighted_row = self.highlighted_rows.get(index);
-
-        if row.is_none() || highlighted_row.is_none() {
-            return None;
-        }
-        
-        return Some((highlighted_row.unwrap(), row.unwrap().len()));
-    }
-
     pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
     }
@@ -85,11 +64,11 @@ impl Document {
         self.rows.len()
     }
 
-    fn highlight(&mut self) {
+    pub fn highlight(&mut self) {
         if let Some(filename) = &self.file_name {
-            self.highlight.set_file_name(filename.to_string());
+            self.highlighter.set_file_name(filename.to_string());
         }
-        let highlight = &self.highlight;
+        let highlighter = &self.highlighter;
 
         let mut contents = String::new();
         for row in &self.rows {
@@ -97,10 +76,8 @@ impl Document {
             contents.push('\n');
         }
 
-        let highlighted_rows: Vec<Row> = highlight.highlight_contents(&contents[..]);
-
-        assert_eq!(highlighted_rows.len(), self.rows.len());
-        self.highlighted_rows = highlighted_rows;
+        let rows: Vec<Row> = highlighter.highlight_contents(&contents[..]);
+        self.rows = rows;
     }
 
     pub fn insert_newline(&mut self, at: &Position) {

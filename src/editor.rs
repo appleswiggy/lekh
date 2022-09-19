@@ -149,6 +149,7 @@ impl Editor {
 
         if self.document.save().is_ok() {
             self.status_message = StatusMessage::from("File saved successfully.".to_string());
+            self.document.highlight();
         } else {
             self.status_message = StatusMessage::from("Error writing file!".to_string());
             return Err("Can't save file.");
@@ -300,7 +301,7 @@ impl Editor {
             self.terminal.clear_screen()?;
         } else {
             self.draw_status_bar()?;
-            print!("{}", self.document.highlight.plain_text_colors);
+            print!("{}", self.document.highlighter.plain_text_colors);
 
             self.draw_rows()?;
             self.draw_message_bar()?;
@@ -401,23 +402,23 @@ impl Editor {
         println!("{}\r", welcome_message);
     }
 
-    pub fn draw_row(&self, row: &Row, len: usize) {
+    pub fn draw_row(&self, row: &Row) {
         let width = self.terminal.get_size().width as usize;
         let start = self.offset.x;
         let end = self.offset.x.saturating_add(width);
 
-        row.render(start, end, len);
+        row.render(start, end);
     }
 
     fn draw_rows(&mut self) -> Result<(), std::io::Error> {
         let height = self.terminal.get_size().height;
         for terminal_row in 0..height {
             self.terminal.clear_current_line()?;
-            if let Some((row, len)) = self
+            if let Some(row) = self
                 .document
-                .highlighted_row(self.offset.y.saturating_add(terminal_row as usize))
+                .row(self.offset.y.saturating_add(terminal_row as usize))
             {
-                self.draw_row(row, len);
+                self.draw_row(row);
 
             } else if self.document.is_empty() && terminal_row == height / 3 {
                 self.draw_welcome_message();
@@ -488,10 +489,12 @@ impl Editor {
 
         if Instant::now() - message.time < Duration::new(5, 0) {
             let len = message.text.len();
-            text = format!("{}{}", message.text.clone(), &" ".repeat(width - len));
+            text = format!("{}{}", message.text.clone(), &" ".repeat(width.saturating_sub(len)));
 
         } else {
-            text = " ".repeat(width);
+            // text = " ".repeat(width);
+            let help = "HELP: Ctrl-F = find | Ctrl-S = save | Ctrl-Q = quit";
+            text = format!("{}{}", help, " ".repeat(width - help.len()));
         }
 
         text.truncate(width);
@@ -548,7 +551,9 @@ impl Editor {
             return Ok(None);
         }
 
-        self.status_message = StatusMessage::from(String::new());
+        let help = "HELP: Ctrl-F = find | Ctrl-S = save | Ctrl-Q = quit";
+        let help = format!("{}{}", help, " ".repeat(self.terminal.get_size().width as usize - help.len()));
+        self.status_message = StatusMessage::from(help);
 
         if result.is_empty() {
             return Ok(None);

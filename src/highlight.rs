@@ -5,14 +5,14 @@ use syntect::easy::HighlightLines;
 
 use crate::Row;
 
-pub struct Highlight {
+pub struct Highlighter {
     syntax_set: SyntaxSet,
     theme_set: ThemeSet,
     filename: Option<String>,
     pub plain_text_colors: String,
 }
 
-impl Highlight {
+impl Highlighter {
     pub fn default() -> Self {
         let ss = SyntaxSet::load_defaults_newlines();
         let ts = ThemeSet::load_defaults();
@@ -57,8 +57,7 @@ impl Highlight {
         for line in LinesWithEndings::from(contents) {
             let ranges: Vec<(Style, &str)> = h.highlight_line(line, &self.syntax_set).unwrap();
             let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
-            let escaped = escaped.trim_end();
-            res.push(Row::from(escaped));
+            res.push(Row::from(&line[..line.len()-1], &escaped[..escaped.len()-1]));
         }
 
         res

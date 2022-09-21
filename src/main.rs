@@ -3,15 +3,15 @@ use editor::Editor;
 pub use document::Document;
 pub use editor::Position;
 pub use editor::SearchDirection;
+pub use highlight::Highlighter;
 pub use row::Row;
 pub use terminal::Terminal;
-pub use highlight::Highlighter;
 
 mod document;
 mod editor;
+mod highlight;
 mod row;
 mod terminal;
-mod highlight;
 
 fn main() {
     Editor::default().run();

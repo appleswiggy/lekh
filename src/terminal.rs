@@ -108,11 +108,11 @@ impl Terminal {
         loop {
             let event = read()?;
             match event {
-               Event::Key(key_event) => return Ok(key_event),
-               Event::Resize(width, height) => {
+                Event::Key(key_event) => return Ok(key_event),
+                Event::Resize(width, height) => {
                     resize_handler(width, height)?;
-               }
-               _ => (), 
+                }
+                _ => (),
             }
         }
     }

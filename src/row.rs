@@ -1,7 +1,12 @@
 use std::cmp;
+use std::io::stdout;
 
 use crate::SearchDirection;
 
+use crossterm::{
+    queue,
+    style::{Attribute, SetAttribute},
+};
 use unicode_segmentation::UnicodeSegmentation;
 
 pub struct Row {
@@ -26,7 +31,28 @@ impl Row {
             len: st.graphemes(true).count(),
         }
     }
-    pub fn render(&self, start: usize, end: usize) {
+
+    pub fn render(&self, start: usize, end: usize, search_keyword: &Option<String>) {
+        let mut prev_esc_seq = String::new();
+
+        let reverse_colors_start: usize;
+        let reverse_colors_end: usize;
+
+        if let Some(st) = search_keyword {
+            if let Some(pos) = self.find(&st[..], 0, SearchDirection::Forward) {
+                reverse_colors_start = pos.saturating_sub(start);
+                reverse_colors_end = pos.saturating_add(st.len()).saturating_sub(start);
+            }
+            else {
+                reverse_colors_start = 0;
+                reverse_colors_end = 0;
+            }
+        }
+        else {
+            reverse_colors_start = 0;
+            reverse_colors_end = 0;
+        }
+
         let end = cmp::min(end, self.len);
         let start = cmp::min(start, end);
 
@@ -35,14 +61,15 @@ impl Row {
         let mut skip = 0;
         let mut chars = 0;
 
-        for grapheme in self.highlighted[..]
-            .graphemes(true)
-        {
+        let mut stdout = stdout();
+
+        for grapheme in self.highlighted[..].graphemes(true) {
             if grapheme == "\x1B" {
                 flag = true;
             }
             if flag == true && (grapheme == "m") {
                 flag = false;
+                prev_esc_seq.push_str(grapheme);
                 print!("{}", grapheme);
                 continue;
             }
@@ -50,23 +77,45 @@ impl Row {
             if flag == false {
                 if skip == start {
                     if chars < end - start {
+                        if reverse_colors_start + reverse_colors_end != 0 {
+                            if chars == reverse_colors_start {
+                                if let Err(_) = queue!(stdout, SetAttribute(Attribute::Reverse)) {
+                                    panic!("Couldn't write to stdout.");
+                                };
+                            }
+                        }
                         if grapheme == "\t" {
                             print!(" ");
                         } else {
                             print!("{}", grapheme);
                         }
                         chars += 1;
-                    }
-                    else {
+
+                        if reverse_colors_start + reverse_colors_end != 0 {
+                            if chars == reverse_colors_end {
+                                if let Err(_) = queue!(stdout, SetAttribute(Attribute::Reset)) {
+                                    panic!("Couldn't write to stdout.");
+                                };
+                            }
+                            print!("{}", prev_esc_seq);
+                        }
+                    } else {
                         break;
                     }
                 } else {
                     skip += 1;
                 }
             } else {
+                prev_esc_seq.push_str(grapheme);
                 print!("{}", grapheme);
             }
+
         }
+        if let Err(_) = queue!(stdout, SetAttribute(Attribute::Reset)) {
+            panic!("Couldn't write to stdout.");
+        };
+
+        print!("{}", prev_esc_seq);
         print!("\r\n");
     }
 

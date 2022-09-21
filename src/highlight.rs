@@ -1,7 +1,7 @@
-use syntect::parsing::SyntaxSet;
-use syntect::highlighting::{ThemeSet, Style};
-use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 use syntect::easy::HighlightLines;
+use syntect::highlighting::{Style, ThemeSet};
+use syntect::parsing::SyntaxSet;
+use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 
 use crate::Row;
 
@@ -42,12 +42,11 @@ impl Highlighter {
 
     pub fn highlight_contents(&self, contents: &str) -> Vec<Row> {
         let syntax = match &self.filename {
-            Some(file) => {
-                self.syntax_set
-                    .find_syntax_for_file(file)
-                    .unwrap()
-                    .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text())
-            },
+            Some(file) => self
+                .syntax_set
+                .find_syntax_for_file(file)
+                .unwrap()
+                .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text()),
             None => self.syntax_set.find_syntax_plain_text(),
         };
 
@@ -57,11 +56,12 @@ impl Highlighter {
         for line in LinesWithEndings::from(contents) {
             let ranges: Vec<(Style, &str)> = h.highlight_line(line, &self.syntax_set).unwrap();
             let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
-            res.push(Row::from(&line[..line.len()-1], &escaped[..escaped.len()-1]));
+            res.push(Row::from(
+                &line[..line.len() - 1],
+                &escaped[..escaped.len() - 1],
+            ));
         }
 
         res
     }
-
-
 }

@@ -51,6 +51,7 @@ pub struct Editor {
     document: Document,
     status_message: StatusMessage,
     quit_times: u8,
+    search_keyword: Option<String>,
 }
 
 impl Editor {
@@ -78,6 +79,7 @@ impl Editor {
             document,
             status_message: StatusMessage::from(initial_status),
             quit_times: QUIT_TIMES,
+            search_keyword: None,
         }
     }
 
@@ -122,7 +124,7 @@ impl Editor {
                         }
                         "n" | "N" => {
                             break;
-                        },
+                        }
                         _ => (),
                     }
                 } else {
@@ -170,6 +172,7 @@ impl Editor {
                 |editor, key, query| {
                     let mut moved = false;
                     found = false;
+                    editor.search_keyword = Some(query.clone());
 
                     match key {
                         KeyCode::Right | KeyCode::Down => {
@@ -190,6 +193,7 @@ impl Editor {
                     {
                         editor.cursor_position = position;
                         editor.scroll();
+
                         found = true;
                     } else if moved {
                         editor.move_cursor(KeyCode::Left);
@@ -197,16 +201,16 @@ impl Editor {
                 },
             )
             .unwrap_or(None);
-        
+
         if query.is_none() {
             self.cursor_position = old_position;
             self.scroll();
-        }
-        else if !found {
+        } else if !found {
             self.status_message = StatusMessage::from("No results found.".to_string());
             self.cursor_position = old_position;
             self.scroll();
         }
+        self.search_keyword = None;
     }
 
     fn process_keypress(&mut self) -> Result<(), std::io::Error> {
@@ -226,7 +230,7 @@ impl Editor {
                             if self.save().is_err() {
                                 // do nothing
                             };
-                        },
+                        }
                         'f' | 'F' => self.search(),
                         _ => (),
                     }
@@ -308,7 +312,11 @@ impl Editor {
 
             self.terminal.move_cursor(&Position {
                 x: self.cursor_position.x.saturating_sub(self.offset.x),
-                y: self.cursor_position.y.saturating_sub(self.offset.y).saturating_add(1),
+                y: self
+                    .cursor_position
+                    .y
+                    .saturating_sub(self.offset.y)
+                    .saturating_add(1),
             })?;
         }
 
@@ -407,7 +415,7 @@ impl Editor {
         let start = self.offset.x;
         let end = self.offset.x.saturating_add(width);
 
-        row.render(start, end);
+        row.render(start, end, &self.search_keyword);
     }
 
     fn draw_rows(&mut self) -> Result<(), std::io::Error> {
@@ -419,7 +427,6 @@ impl Editor {
                 .row(self.offset.y.saturating_add(terminal_row as usize))
             {
                 self.draw_row(row);
-
             } else if self.document.is_empty() && terminal_row == height / 3 {
                 self.draw_welcome_message();
             } else {
@@ -439,11 +446,7 @@ impl Editor {
         let width = self.terminal.get_size().width as usize;
         let mut file_name = "[No Name]".to_string();
 
-        let modified_indicator = if self.document.is_dirty() {
-            " *"
-        } else {
-            ""
-        };
+        let modified_indicator = if self.document.is_dirty() { " *" } else { "" };
 
         if let Some(filename) = self.document.get_file_name() {
             file_name = filename;
@@ -489,8 +492,11 @@ impl Editor {
 
         if Instant::now() - message.time < Duration::new(5, 0) {
             let len = message.text.len();
-            text = format!("{}{}", message.text.clone(), &" ".repeat(width.saturating_sub(len)));
-
+            text = format!(
+                "{}{}",
+                message.text.clone(),
+                &" ".repeat(width.saturating_sub(len))
+            );
         } else {
             let help = "HELP: Ctrl-F = find | Ctrl-S = save | Ctrl-Q = quit";
             text = format!("{}{}", help, " ".repeat(width.saturating_sub(help.len())));
@@ -551,7 +557,11 @@ impl Editor {
         }
 
         let help = "HELP: Ctrl-F = find | Ctrl-S = save | Ctrl-Q = quit";
-        let help = format!("{}{}", help, " ".repeat((self.terminal.get_size().width as usize).saturating_sub(help.len())));
+        let help = format!(
+            "{}{}",
+            help,
+            " ".repeat((self.terminal.get_size().width as usize).saturating_sub(help.len()))
+        );
         self.status_message = StatusMessage::from(help);
 
         if result.is_empty() {

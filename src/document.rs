@@ -23,7 +23,7 @@ impl Document {
             highlighter,
         }
     }
-   
+
     pub fn open(filename: &str) -> Result<Self, std::io::Error> {
         let contents = fs::read_to_string(filename)?;
 

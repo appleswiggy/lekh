@@ -1,6 +1,8 @@
 use std::cmp;
 use std::io::stdout;
 
+use crate::Terminal;
+
 use crate::SearchDirection;
 
 use crossterm::{
@@ -79,8 +81,8 @@ impl Row {
                     if chars < end - start {
                         if reverse_colors_start + reverse_colors_end != 0 {
                             if chars == reverse_colors_start {
-                                if let Err(_) = queue!(stdout, SetAttribute(Attribute::Reverse)) {
-                                    panic!("Couldn't write to stdout.");
+                                if queue!(stdout, SetAttribute(Attribute::Reverse)).is_err() {
+                                    Terminal::cleanup_and_exit(Some("Error: Couldn't write to stdout"), 101);
                                 };
                             }
                         }
@@ -93,8 +95,8 @@ impl Row {
 
                         if reverse_colors_start + reverse_colors_end != 0 {
                             if chars == reverse_colors_end {
-                                if let Err(_) = queue!(stdout, SetAttribute(Attribute::Reset)) {
-                                    panic!("Couldn't write to stdout.");
+                                if queue!(stdout, SetAttribute(Attribute::Reset)).is_err() {
+                                    Terminal::cleanup_and_exit(Some("Error: Couldn't write to stdout"), 101);
                                 };
                             }
                             print!("{}", prev_esc_seq);
@@ -111,8 +113,8 @@ impl Row {
             }
 
         }
-        if let Err(_) = queue!(stdout, SetAttribute(Attribute::Reset)) {
-            panic!("Couldn't write to stdout.");
+        if queue!(stdout, SetAttribute(Attribute::Reset)).is_err() {
+            Terminal::cleanup_and_exit(Some("Error: Couldn't write to stdout"), 101);
         };
 
         print!("{}", prev_esc_seq);

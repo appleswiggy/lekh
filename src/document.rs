@@ -1,10 +1,12 @@
 use std::fs;
 use std::io::Write;
+use std::process;
 
 use crate::Highlighter;
 use crate::Position;
 use crate::Row;
 use crate::SearchDirection;
+use crate::Terminal;
 
 pub struct Document {
     rows: Vec<Row>,
@@ -30,7 +32,12 @@ impl Document {
         let mut highlighter = Highlighter::default();
         highlighter.set_file_name(filename.to_string());
 
-        let rows: Vec<Row> = highlighter.highlight_contents(&contents[..]);
+        let rows: Vec<Row> = if let Ok(rows) = highlighter.highlight_contents(&contents[..]) {
+            rows
+        } else {
+            eprintln!("Error: Couldn't highlight the file.\r");
+            process::exit(103)
+        };
 
         Ok(Self {
             rows,
@@ -76,7 +83,11 @@ impl Document {
             contents.push('\n');
         }
 
-        let rows: Vec<Row> = highlighter.highlight_contents(&contents[..]);
+        let rows: Vec<Row> = if let Ok(rows) = highlighter.highlight_contents(&contents[..]) {
+            rows
+        } else {
+            Terminal::cleanup_and_exit(Some("Error: Couldn't highlight the file."), 103)
+        };
         self.rows = rows;
     }
 

@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::process;
+
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{Style, ThemeSet};
 use syntect::parsing::SyntaxSet;
@@ -22,7 +25,13 @@ impl Highlighter {
         let mut plain_text_colors: String = String::new();
 
         for line in LinesWithEndings::from(" ") {
-            let ranges: Vec<(Style, &str)> = h.highlight_line(line, &ss).unwrap();
+            let ranges: Vec<(Style, &str)> = if let Ok(ranges) = h.highlight_line(line, &ss) {
+                ranges
+            } else {
+                eprintln!("Error: Couldn't highlight the file.\r");
+                process::exit(103);
+            };
+
             let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
             plain_text_colors = escaped.trim_end().to_string();
             break;
@@ -40,12 +49,11 @@ impl Highlighter {
         self.filename = Some(filename);
     }
 
-    pub fn highlight_contents(&self, contents: &str) -> Vec<Row> {
+    pub fn highlight_contents(&self, contents: &str) -> Result<Vec<Row>, Box<dyn Error>> {
         let syntax = match &self.filename {
             Some(file) => self
                 .syntax_set
-                .find_syntax_for_file(file)
-                .unwrap()
+                .find_syntax_for_file(file)?
                 .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text()),
             None => self.syntax_set.find_syntax_plain_text(),
         };
@@ -54,14 +62,15 @@ impl Highlighter {
 
         let mut res: Vec<Row> = Vec::new();
         for line in LinesWithEndings::from(contents) {
-            let ranges: Vec<(Style, &str)> = h.highlight_line(line, &self.syntax_set).unwrap();
+            let ranges: Vec<(Style, &str)> = h.highlight_line(line, &self.syntax_set)?;
             let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
+
             res.push(Row::from(
                 &line[..line.len() - 1],
                 &escaped[..escaped.len() - 1],
             ));
         }
 
-        res
+        Ok(res)
     }
 }

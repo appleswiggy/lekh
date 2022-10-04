@@ -3,7 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Color;
 
-use std::env;
+use std::{env, process};
 use std::time::Duration;
 use std::time::Instant;
 
@@ -73,7 +73,7 @@ impl Editor {
 
         Self {
             should_quit: false,
-            terminal: Terminal::default().expect("Failed to initialize terminal."),
+            terminal: Terminal::default(),
             cursor_position: Position::default(),
             offset: Position::default(),
             document,
@@ -84,26 +84,25 @@ impl Editor {
     }
 
     pub fn run(&mut self) {
-        if let Err(_) = self.terminal.enter_alternate_screen() {
-            panic!("Can't enter alternate screen.");
+        if Terminal::enter_alternate_screen().is_err() {
+            eprintln!("Error: Couldn't enter alternate terminal screen.\r");
+            process::exit(102);
         }
         Terminal::into_raw_mode();
 
         loop {
             if self.refresh_screen().is_err() {
-                panic!("Can't clear the terminal screen");
+                Terminal::cleanup_and_exit(Some("Error: Couldn't modify terminal screen."), 101);
             }
 
             if self.should_quit {
-                break;
+                Terminal::cleanup_and_exit(None, 0);
             }
 
             if self.process_keypress().is_err() {
-                panic!("Can't process keypress.");
+                Terminal::cleanup_and_exit(Some("Error: Couldn't process the pressed key."), 101);
             }
         }
-
-        self.terminal.cleanup_and_exit(0);
     }
 
     fn quit(&mut self) -> Result<(), std::io::Error> {
@@ -117,7 +116,7 @@ impl Editor {
                 if let Some(response) = result {
                     match &*response {
                         "y" | "Y" => {
-                            if let Err(_) = self.save() {
+                            if self.save().is_err() {
                                 quit = false;
                             }
                             break;
@@ -157,7 +156,7 @@ impl Editor {
             return Err("Can't save file.");
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn search(&mut self) {
@@ -226,11 +225,7 @@ impl Editor {
                 if key_event.modifiers == KeyModifiers::CONTROL {
                     match ch {
                         'q' | 'Q' => self.quit()?,
-                        's' | 'S' => {
-                            if self.save().is_err() {
-                                // do nothing
-                            };
-                        }
+                        's' | 'S' => self.save().unwrap_or(()),
                         'f' | 'F' => self.search(),
                         _ => (),
                     }
@@ -434,10 +429,7 @@ impl Editor {
             }
         }
 
-        if let Err(_) = self.terminal.flush() {
-            panic!("Error flushing terminal.");
-        }
-
+        self.terminal.flush()?;
         Ok(())
     }
 
@@ -506,10 +498,7 @@ impl Editor {
         print!("{}", text);
 
         self.terminal.reset_colors()?;
-
-        if let Err(_) = self.terminal.flush() {
-            panic!("Error flushing terminal.");
-        }
+        self.terminal.flush()?;
 
         Ok(())
     }

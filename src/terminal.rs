@@ -22,17 +22,23 @@ pub struct Terminal {
 }
 
 impl Terminal {
-    pub fn default() -> Result<Self, std::io::Error> {
-        let (columns, rows) = crossterm::terminal::size()?;
+    pub fn default() -> Self {
+        let (columns, rows) = if let Ok(size) = crossterm::terminal::size() {
+            size
+        } else {
+            eprintln!("Error: Couldn't fetch terminal state.\r");
+            process::exit(101);
+        };
+
         let size: Size = Size {
             width: columns,
             height: rows.saturating_sub(2),
         };
 
-        Ok(Terminal {
+        Terminal {
             size,
             _stdout: stdout(),
-        })
+        }
     }
 
     pub fn get_size(&self) -> &Size {
@@ -50,14 +56,10 @@ impl Terminal {
         match is_raw_mode_enabled() {
             Ok(enabled) => {
                 if !enabled && enable_raw_mode().is_err() {
-                    // the same below note applies here as well.
-                    // write eprintln instead of panic and use process::exit
-                    panic!("Error enabling raw mode.");
+                    Terminal::cleanup_and_exit(Some("Error: Couldn't enable raw mode."), 101);
                 }
             }
-            // note - raw mode is not enabled yet, so don't try to disable it here.
-            // or add a check in cleanup function - if raw mode is enabled - then disable it
-            Err(_) => panic!("Error fetching terminal state."),
+            Err(_) => Terminal::cleanup_and_exit(Some("Error: Couldn't fetch terminal state."), 101),
         }
     }
 
@@ -132,28 +134,47 @@ impl Terminal {
         Ok(())
     }
 
-    pub fn enter_alternate_screen(&mut self) -> Result<(), std::io::Error> {
-        crossterm::execute!(self._stdout, crossterm::terminal::EnterAlternateScreen)?;
+    pub fn enter_alternate_screen() -> Result<(), std::io::Error> {
+        crossterm::execute!(stdout(), crossterm::terminal::EnterAlternateScreen)?;
         Ok(())
     }
 
-    pub fn leave_alternate_screen(&mut self) -> Result<(), std::io::Error> {
-        crossterm::execute!(self._stdout, crossterm::terminal::LeaveAlternateScreen)?;
+    pub fn leave_alternate_screen() -> Result<(), std::io::Error> {
+        crossterm::execute!(stdout(), crossterm::terminal::LeaveAlternateScreen)?;
         Ok(())
     }
 
-    pub fn cleanup_and_exit(&mut self, status_code: i32) {
+    pub fn cleanup_and_exit(err: Option<&str>, mut exit_code: i32) -> ! {
+        if Terminal::leave_alternate_screen().is_err() {
+            eprintln!("Error: Couldn't leave alternate screen.\r");
+            if exit_code == 0 {
+                exit_code = 102;
+            }
+        }
+
+        if let Some(message) = err {
+            eprintln!("{}\r", message);
+        }
+
         match is_raw_mode_enabled() {
             Ok(enabled) => {
                 if enabled && disable_raw_mode().is_err() {
-                    panic!("Error disabling raw mode.");
+                    eprintln!("Error: Couldn't disable raw mode.\r");
+
+                    if exit_code == 0 {
+                        exit_code = 101;
+                    }
                 }
             }
-            Err(_) => panic!("Error fetching terminal state."),
+            Err(_) => {
+                eprintln!("Error: Couldn't fetch terminal state.\r");
+
+                if exit_code == 0 {
+                    exit_code = 101;
+                }
+            },
         }
-        if let Err(_) = self.leave_alternate_screen() {
-            panic!("Error leaving alternate screen.");
-        }
-        process::exit(status_code);
+        
+        process::exit(exit_code);
     }
 }
